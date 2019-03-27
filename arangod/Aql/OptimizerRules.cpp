@@ -35,6 +35,7 @@
 #include "Aql/ExecutionPlan.h"
 #include "Aql/Function.h"
 #include "Aql/IndexNode.h"
+#include "Aql/KShortestPathsNode.h"
 #include "Aql/ModificationNodes.h"
 #include "Aql/Optimizer.h"
 #include "Aql/Query.h"
@@ -86,7 +87,9 @@ bool accessesCollectionVariable(arangodb::aql::ExecutionPlan const* plan,
 #ifdef USE_IRESEARCH
         setter->getType() == EN::ENUMERATE_IRESEARCH_VIEW ||
 #endif
-        setter->getType() == EN::SUBQUERY || setter->getType() == EN::TRAVERSAL ||
+        setter->getType() == EN::SUBQUERY ||
+        setter->getType() == EN::TRAVERSAL ||
+        setter->getType() == EN::K_SHORTEST_PATHS ||
         setter->getType() == EN::SHORTEST_PATH) {
       return true;
     }
@@ -111,8 +114,10 @@ arangodb::aql::Collection const* getCollection(arangodb::aql::ExecutionNode cons
     case EN::INDEX:
       return ExecutionNode::castTo<arangodb::aql::IndexNode const*>(node)->collection();
     case EN::TRAVERSAL:
+    case EN::K_SHORTEST_PATHS:
     case EN::SHORTEST_PATH:
       return ExecutionNode::castTo<arangodb::aql::GraphNode const*>(node)->collection();
+
     default:
       // note: modification nodes are not covered here yet
       THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL,
@@ -349,6 +354,7 @@ class RestrictToSingleShardChecker final
 
     switch (en->getType()) {
       case EN::TRAVERSAL:
+      case EN::K_SHORTEST_PATHS:
       case EN::SHORTEST_PATH: {
         _stop = true;
         return true;  // abort enumerating, we are done already!
@@ -1052,6 +1058,7 @@ void arangodb::aql::removeRedundantSortsRule(Optimizer* opt,
         } else if (current->getType() == EN::ENUMERATE_LIST ||
                    current->getType() == EN::ENUMERATE_COLLECTION ||
                    current->getType() == EN::TRAVERSAL ||
+                   current->getType() == EN::K_SHORTEST_PATHS ||
                    current->getType() == EN::SHORTEST_PATH) {
           // ok, but we cannot remove two different sorts if one of these node
           // types is between them
@@ -1670,7 +1677,9 @@ void arangodb::aql::moveCalculationsDownRule(Optimizer* opt,
                  currentType == EN::ENUMERATE_IRESEARCH_VIEW ||
 #endif
                  currentType == EN::ENUMERATE_LIST ||
-                 currentType == EN::TRAVERSAL || currentType == EN::SHORTEST_PATH ||
+                 currentType == EN::TRAVERSAL ||
+                 currentType == EN::SHORTEST_PATH ||
+                 currentType == EN::K_SHORTEST_PATHS ||
                  currentType == EN::COLLECT || currentType == EN::NORESULTS) {
         // we will not push further down than such nodes
         done = true;
@@ -2091,6 +2100,11 @@ class arangodb::aql::RedundantCalculationsReplacer final
 
       case EN::TRAVERSAL: {
         replaceInVariable<TraversalNode>(en);
+        break;
+      }
+
+      case EN::K_SHORTEST_PATHS: {
+        replaceStartTargetVariables<ShortestPathNode>(en);
         break;
       }
 
@@ -3128,6 +3142,7 @@ struct SortToIndexNode final : public WalkerWorker<ExecutionNode> {
   bool before(ExecutionNode* en) override final {
     switch (en->getType()) {
       case EN::TRAVERSAL:
+      case EN::K_SHORTEST_PATHS:
       case EN::SHORTEST_PATH:
       case EN::ENUMERATE_LIST:
 #ifdef USE_IRESEARCH
@@ -3518,6 +3533,7 @@ void arangodb::aql::optimizeClusterSingleShardRule(Optimizer* opt,
   SmallVector<ExecutionNode*>::allocator_type::arena_type s;
   SmallVector<ExecutionNode*> nodes{s};
   std::vector<ExecutionNode::NodeType> types = {ExecutionNode::TRAVERSAL,
+                                                ExecutionNode::K_SHORTEST_PATHS,
                                                 ExecutionNode::SHORTEST_PATH,
                                                 ExecutionNode::SUBQUERY};
   plan->findNodesOfType(nodes, types, true);
@@ -4346,6 +4362,7 @@ void arangodb::aql::distributeFilternCalcToClusterRule(Optimizer* opt,
         case EN::INDEX:
         case EN::ENUMERATE_COLLECTION:
         case EN::TRAVERSAL:
+        case EN::K_SHORTEST_PATHS:
         case EN::SHORTEST_PATH:
         case EN::SUBQUERY:
 #ifdef USE_IRESEARCH
@@ -4482,6 +4499,7 @@ void arangodb::aql::distributeSortToClusterRule(Optimizer* opt,
         case EN::LIMIT:
         case EN::INDEX:
         case EN::TRAVERSAL:
+        case EN::K_SHORTEST_PATHS:
         case EN::SHORTEST_PATH:
         case EN::REMOTESINGLE:
 #ifdef USE_IRESEARCH
@@ -5015,6 +5033,7 @@ class RemoveToEnumCollFinder final : public WalkerWorker<ExecutionNode> {
       case EN::LIMIT:
       case EN::SORT:
       case EN::TRAVERSAL:
+      case EN::K_SHORTEST_PATHS:
       case EN::SHORTEST_PATH: {
         // if we meet any of the above, then we abort . . .
         break;
@@ -5701,7 +5720,7 @@ void arangodb::aql::patchUpdateStatementsRule(Optimizer* opt,
           }
           modified = true;
         }
-      } else if (type == EN::TRAVERSAL || type == EN::SHORTEST_PATH) {
+      } else if (type == EN::TRAVERSAL || type == EN::K_SHORTEST_PATHS || type == EN::SHORTEST_PATH) {
         // unclear what will be read by the traversal
         modified = false;
         break;
@@ -5925,6 +5944,7 @@ void arangodb::aql::prepareTraversalsRule(Optimizer* opt,
   SmallVector<ExecutionNode*>::allocator_type::arena_type a;
   SmallVector<ExecutionNode*> tNodes{a};
   plan->findNodesOfType(tNodes, EN::TRAVERSAL, true);
+  plan->findNodesOfType(tNodes, EN::K_SHORTEST_PATHS, true);
   plan->findNodesOfType(tNodes, EN::SHORTEST_PATH, true);
 
   if (tNodes.empty()) {
@@ -5939,6 +5959,10 @@ void arangodb::aql::prepareTraversalsRule(Optimizer* opt,
     if (n->getType() == EN::TRAVERSAL) {
       TraversalNode* traversal = ExecutionNode::castTo<TraversalNode*>(n);
       traversal->prepareOptions();
+    } else if(n->getType() == EN::K_SHORTEST_PATHS) {
+      TRI_ASSERT(n->getType() == EN::K_SHORTEST_PATHS);
+      KShortestPathsNode* spn = ExecutionNode::castTo<KShortestPathsNode*>(n);
+      spn->prepareOptions();
     } else {
       TRI_ASSERT(n->getType() == EN::SHORTEST_PATH);
       ShortestPathNode* spn = ExecutionNode::castTo<ShortestPathNode*>(n);
@@ -6824,7 +6848,9 @@ void arangodb::aql::geoIndexRule(Optimizer* opt, std::unique_ptr<ExecutionPlan> 
                  current->getType() == EN::ENUMERATE_COLLECTION ||
                  current->getType() == EN::ENUMERATE_LIST ||
                  current->getType() == EN::ENUMERATE_IRESEARCH_VIEW ||
-                 current->getType() == EN::TRAVERSAL || current->getType() == EN::SHORTEST_PATH) {
+                 current->getType() == EN::TRAVERSAL ||
+                 current->getType() == EN::K_SHORTEST_PATHS ||
+                 current->getType() == EN::SHORTEST_PATH) {
         // invalidate limit and sort. filters can still be used
         limit = nullptr;
         info.sorted = false;
@@ -6864,7 +6890,9 @@ void arangodb::aql::sortLimitRule(Optimizer* opt, std::unique_ptr<ExecutionPlan>
                  current->getType() == EN::ENUMERATE_COLLECTION ||
                  current->getType() == EN::ENUMERATE_LIST ||
                  current->getType() == EN::ENUMERATE_IRESEARCH_VIEW ||
-                 current->getType() == EN::TRAVERSAL || current->getType() == EN::SHORTEST_PATH ||
+                 current->getType() == EN::TRAVERSAL ||
+                 current->getType() == EN::SHORTEST_PATH ||
+                 current->getType() == EN::K_SHORTEST_PATHS ||
                  current->getType() == EN::INDEX || current->getType() == EN::COLLECT) {
         // TODO check other end conditions
         break;  // stop parsing

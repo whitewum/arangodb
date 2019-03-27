@@ -735,7 +735,7 @@ for_statement:
   | T_FOR for_output_variables T_IN k_shortest_paths_graph_info {
       // first open a new scope (after expression is evaluated)
       parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
-      // Shortest Path
+      // K Shortest Paths
       auto variableNamesNode = static_cast<AstNode*>($2);
       TRI_ASSERT(variableNamesNode != nullptr);
       TRI_ASSERT(variableNamesNode->type == NODE_TYPE_ARRAY);
@@ -746,7 +746,7 @@ for_statement:
       auto graphInfoNode = static_cast<AstNode*>($4);
       TRI_ASSERT(graphInfoNode != nullptr);
       TRI_ASSERT(graphInfoNode->type == NODE_TYPE_ARRAY);
-      auto node = parser->ast()->createNodeShortestPath(variablesNode, graphInfoNode);
+      auto node = parser->ast()->createNodeKShortestPaths(variablesNode, graphInfoNode);
       parser->ast()->addOperation(node);
 
     }

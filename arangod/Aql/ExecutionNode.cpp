@@ -41,6 +41,7 @@
 #include "Aql/Function.h"
 #include "Aql/IdExecutor.h"
 #include "Aql/IndexNode.h"
+#include "Aql/KShortestPathsNode.h"
 #include "Aql/LimitExecutor.h"
 #include "Aql/ModificationNodes.h"
 #include "Aql/NoResultsExecutor.h"
@@ -99,6 +100,7 @@ std::unordered_map<int, std::string const> const typeNames{
     {static_cast<int>(ExecutionNode::SHORTEST_PATH), "ShortestPathNode"},
     {static_cast<int>(ExecutionNode::REMOTESINGLE),
      "SingleRemoteOperationNode"},
+    {static_cast<int>(ExecutionNode::K_SHORTEST_PATHS), "KShortestPathsNode"},
 #ifdef USE_IRESEARCH
     {static_cast<int>(ExecutionNode::ENUMERATE_IRESEARCH_VIEW),
      "EnumerateViewNode"},
@@ -329,6 +331,8 @@ ExecutionNode* ExecutionNode::fromVPackFactory(ExecutionPlan* plan, VPackSlice c
       return new ShortestPathNode(plan, slice);
     case REMOTESINGLE:
       return new SingleRemoteOperationNode(plan, slice);
+    case K_SHORTEST_PATHS:
+      return new KShortestPathsNode(plan, slice);
 #ifdef USE_IRESEARCH
     case ENUMERATE_IRESEARCH_VIEW:
       return new iresearch::IResearchViewNode(*plan, slice);
@@ -1046,6 +1050,30 @@ void ExecutionNode::RegisterPlan::after(ExecutionNode* en) {
     case ExecutionNode::REMOTESINGLE: {
       depth++;
       auto ep = ExecutionNode::castTo<SingleRemoteOperationNode const*>(en);
+      TRI_ASSERT(ep != nullptr);
+      auto vars = ep->getVariablesSetHere();
+      nrRegsHere.emplace_back(static_cast<RegisterId>(vars.size()));
+      // create a copy of the last value here
+      // this is requried because back returns a reference and emplace/push_back
+      // may invalidate all references
+      RegisterId registerId = static_cast<RegisterId>(vars.size() + nrRegs.back());
+      nrRegs.emplace_back(registerId);
+
+      for (auto& it : vars) {
+        varInfo.emplace(it->id, VarInfo(depth, totalNrRegs));
+        totalNrRegs++;
+      }
+      break;
+    }
+
+    // FIXME: This is the same as SHORTEST_PATH at the moment
+    case ExecutionNode::K_SHORTEST_PATHS: {
+      depth++;
+      auto ep = dynamic_cast<GraphNode const*>(en);
+      if (ep == nullptr) {
+        THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL,
+                                      "unexpected cast result for GraphNode");
+      }
       TRI_ASSERT(ep != nullptr);
       auto vars = ep->getVariablesSetHere();
       nrRegsHere.emplace_back(static_cast<RegisterId>(vars.size()));

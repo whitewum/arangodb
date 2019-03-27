@@ -146,6 +146,7 @@ class ExecutionNode {
     INDEX = 23,
     SHORTEST_PATH = 24,
     REMOTESINGLE = 25,
+    K_SHORTEST_PATHS = 26,
 #ifdef USE_IRESEARCH
     ENUMERATE_IRESEARCH_VIEW,
 #endif
