@@ -395,7 +395,7 @@ std::shared_ptr<Index> RocksDBCollection::createIndex(VPackSlice const& info,
         res.reset(rocksutils::convertStatus(s));
         break;
       }
-      
+
       VPackBuilder builder;
       builder.openObject();
       for (auto const& pair : VPackObjectIterator(RocksDBValue::data(ps))) {
@@ -804,7 +804,7 @@ Result RocksDBCollection::read(transaction::Methods* trx,
       res.reset(TRI_ERROR_ARANGO_DOCUMENT_NOT_FOUND);
       break;
     }  // else found
-    
+
     std::string* buffer = result.setManaged();
     rocksdb::PinnableSlice ps(buffer);
     res = lookupDocumentVPack(trx, documentId, ps, /*readCache*/true, /*fillCache*/true);
@@ -854,12 +854,17 @@ Result RocksDBCollection::insert(arangodb::transaction::Methods* trx,
                                  bool /*lock*/, KeyLockInfo* /*keyLockInfo*/,
                                  std::function<void()> const& cbDuringLock) {
 
+  double start = TRI_microtime(), sub;
+  TRI_DEFER({ LOG_TOPIC("xxxx", ERR, Logger::FIXME) << __func__ << " " __FILE__ << ":" << __LINE__ << " took " << (TRI_microtime() - start); });
+
   bool const isEdgeCollection = (TRI_COL_TYPE_EDGE == _logicalCollection.type());
 
+  sub = TRI_microtime();
   transaction::BuilderLeaser builder(trx);
   TRI_voc_tick_t revisionId;
   Result res(newObjectForInsert(trx, slice, isEdgeCollection, *builder.get(),
                                 options.isRestore, revisionId));
+  LOG_TOPIC("xxxx", ERR, Logger::FIXME) << __func__ << " " __FILE__ << ":" << __LINE__ << " took " << (TRI_microtime() - sub);
   if (res.fail()) {
     return res;
   }
@@ -896,14 +901,18 @@ Result RocksDBCollection::insert(arangodb::transaction::Methods* trx,
 
   LocalDocumentId const documentId = LocalDocumentId::create();
 
+  sub = TRI_microtime();
   RocksDBSavePoint guard(trx, TRI_VOC_DOCUMENT_OPERATION_INSERT);
 
   auto* state = RocksDBTransactionState::toState(trx);
   state->prepareOperation(_logicalCollection.id(), revisionId, TRI_VOC_DOCUMENT_OPERATION_INSERT);
 
+  LOG_TOPIC("xxxx", ERR, Logger::FIXME) << __func__ << " " __FILE__ << ":" << __LINE__ << " took " << (TRI_microtime() - sub);
+
   res = insertDocument(trx, documentId, newSlice, options);
 
   if (res.ok()) {
+    sub = TRI_microtime();
     trackWaitForSync(trx, options);
 
     if (options.returnNew) {
@@ -929,6 +938,7 @@ Result RocksDBCollection::insert(arangodb::transaction::Methods* trx,
     }
 
     guard.finish(hasPerformedIntermediateCommit);
+    LOG_TOPIC("xxxx", ERR, Logger::FIXME) << __func__ << " " __FILE__ << ":" << __LINE__ << " took " << (TRI_microtime() - sub);
   }
 
   return res;
@@ -1263,33 +1273,46 @@ Result RocksDBCollection::insertDocument(arangodb::transaction::Methods* trx,
                                          LocalDocumentId const& documentId,
                                          VPackSlice const& doc,
                                          OperationOptions& options) const {
+
+  double start = TRI_microtime(), sub;
+  TRI_DEFER({ LOG_TOPIC("xxxx", ERR, Logger::FIXME) << __func__ << " " __FILE__ << ":" << __LINE__ << " took " << (TRI_microtime() - start); });
+
   // Coordinator doesn't know index internals
   TRI_ASSERT(!ServerState::instance()->isCoordinator());
   TRI_ASSERT(trx->state()->isRunning());
   Result res;
 
+  sub = TRI_microtime();
   RocksDBKeyLeaser key(trx);
   key->constructDocument(_objectId, documentId);
+  LOG_TOPIC("xxxx", ERR, Logger::FIXME) << __func__ << " " __FILE__ << ":" << __LINE__ << " took " << (TRI_microtime() - sub);
 
+
+  sub = TRI_microtime();
   RocksDBTransactionState* state = RocksDBTransactionState::toState(trx);
   if (state->hasHint(transaction::Hints::Hint::GLOBAL_MANAGED)) {
     // blacklist new document to avoid caching without committing first
     blackListKey(key.ref());
   }
-    
+  LOG_TOPIC("xxxx", ERR, Logger::FIXME) << __func__ << " " __FILE__ << ":" << __LINE__ << " took " << (TRI_microtime() - sub);
+
   RocksDBMethods* mthds = state->rocksdbMethods();
   // disable indexing in this transaction if we are allowed to
   IndexingDisabler disabler(mthds, trx->isSingleOperationTransaction());
 
+  sub = TRI_microtime();
   TRI_ASSERT(key->containsLocalDocumentId(documentId));
   rocksdb::Status s =
       mthds->PutUntracked(RocksDBColumnFamily::documents(), key.ref(),
                           rocksdb::Slice(doc.startAs<char>(),
                                          static_cast<size_t>(doc.byteSize())));
+  LOG_TOPIC("xxxx", ERR, Logger::FIXME) << __func__ << " " __FILE__ << ":" << __LINE__ << " took " << (TRI_microtime() - sub);
+
   if (!s.ok()) {
     return res.reset(rocksutils::convertStatus(s, rocksutils::document));
   }
 
+  sub = TRI_microtime();
   READ_LOCKER(guard, _indexesLock);
   for (std::shared_ptr<Index> const& idx : _indexes) {
     RocksDBIndex* rIdx = static_cast<RocksDBIndex*>(idx.get());
@@ -1299,6 +1322,8 @@ Result RocksDBCollection::insertDocument(arangodb::transaction::Methods* trx,
       break;
     }
   }
+
+  LOG_TOPIC("xxxx", ERR, Logger::FIXME) << __func__ << " " __FILE__ << ":" << __LINE__ << " took " << (TRI_microtime() - sub);
 
   return res;
 }
@@ -1381,12 +1406,12 @@ Result RocksDBCollection::updateDocument(transaction::Methods* trx,
   if (!s.ok()) {
     return res.reset(rocksutils::convertStatus(s, rocksutils::document));
   }
-  
+
   if (state->hasHint(transaction::Hints::Hint::GLOBAL_MANAGED)) {
     // blacklist new document to avoid caching without committing first
     blackListKey(key.ref());
   }
-    
+
   READ_LOCKER(guard, _indexesLock);
   for (std::shared_ptr<Index> const& idx : _indexes) {
     RocksDBIndex* rIdx = static_cast<RocksDBIndex*>(idx.get());
