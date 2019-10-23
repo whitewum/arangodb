@@ -241,40 +241,6 @@ describe ArangoDB do
 ## checking GZIP requests
 ################################################################################
 
-    context "gzip requests" do
-      it "checks handling of a request, with gzip support" do
-        require 'uri'
-        require 'net/http'
-
-        # only run the following test when using SSL
-        if not ArangoDB.base_uri =~ /^https:/
-          uri = URI.parse(ArangoDB.base_uri + "/_db/_system/_admin/aardvark/index.html")
-          http = Net::HTTP.new(uri.host, uri.port)
-
-          request = Net::HTTP::Get.new(uri.request_uri)
-          request["Accept-Encoding"] = "gzip"
-          response = http.request(request)
-
-          # check content encoding
-          response['content-encoding'].should eq('gzip')
-        end
-      end
-
-      it "checks handling of an request, without gzip support" do
-        cmd = "/_admin/aardvark/index.html"
-        doc = ArangoDB.log_get("admin-interface-get", cmd, :headers => { "Accept-Encoding" => "" }, :format => :plain)
-
-        # check response code
-        doc.code.should eq(200)
-        # check content encoding
-        doc.headers['Content-Encoding'].should be nil
-      end
-    end
-
-################################################################################
-## checking GZIP requests
-################################################################################
-
     context "deflate requests" do
       it "checks handling of a request, with deflate support" do
         require 'uri'

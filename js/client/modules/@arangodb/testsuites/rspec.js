@@ -29,6 +29,7 @@ const functionsDocumentation = {
   'server_http': 'http server tests in Mocha',
   'http_replication': 'http replication tests',
   'http_server': 'http server tests in Ruby',
+  'http_webif': 'http web interface tests in Ruby',
   'ssl_server': 'https server tests'
 };
 const optionsDocumentation = [
@@ -55,6 +56,7 @@ const RESET = require('internal').COLORS.COLOR_RESET;
 const testPaths = {
   'http_replication': [tu.pathForTesting('HttpReplication', 'rb')],
   'http_server': [tu.pathForTesting('HttpInterface', 'rb')],
+  'http_webif': [tu.pathForTesting('WebInterface', 'rb')],
   'ssl_server': [tu.pathForTesting('HttpInterface', 'rb')],
   'server_http': [tu.pathForTesting('common/http')],
 };
@@ -105,6 +107,23 @@ function httpServer (options) {
 }
 
 // //////////////////////////////////////////////////////////////////////////////
+// / @brief TEST: http_webif
+// //////////////////////////////////////////////////////////////////////////////
+
+function httpWebIf (options) {
+  var opts = {
+    'httpTrustedOrigin': 'http://was-erlauben-strunz.it'
+  };
+  _.defaults(opts, options);
+
+  let testCases = tu.scanTestPaths(testPaths.http_webif, options);
+
+  testCases = tu.splitBuckets(options, testCases);
+
+  return tu.performTests(opts, testCases, 'http_webif', tu.runInRSpec);
+}
+
+// //////////////////////////////////////////////////////////////////////////////
 // / @brief TEST: ssl_server
 // //////////////////////////////////////////////////////////////////////////////
 
@@ -134,6 +153,7 @@ exports.setup = function (testFns, defaultFns, opts, fnDocs, optionsDoc, allTest
   Object.assign(allTestPaths, testPaths);
   testFns['http_replication'] = httpReplication;
   testFns['http_server'] = httpServer;
+  testFns['http_webif'] = httpWebIf;
   testFns['server_http'] = serverHttp;
   testFns['ssl_server'] = sslServer;
 
