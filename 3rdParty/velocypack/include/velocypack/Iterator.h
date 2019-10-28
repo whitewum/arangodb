@@ -43,8 +43,8 @@ class ArrayIterator {
 
   explicit ArrayIterator(Slice slice)
       : _slice(slice), _size(0), _position(0), _current(nullptr), _first(nullptr) {
-    
-    uint8_t const head = slice.head();     
+
+    uint8_t const head = slice.head();
 
     if (VELOCYPACK_UNLIKELY(slice.type(head) != ValueType::Array)) {
       throw Exception(Exception::InvalidValueType, "Expecting Array slice");
@@ -93,13 +93,13 @@ class ArrayIterator {
     // be performed by Slice::getNthOffset()
     return Slice(_slice.begin() + _slice.getNthOffset(_position));
   }
-  
-  ArrayIterator begin() const { 
+
+  ArrayIterator begin() const {
     auto it = ArrayIterator(*this);
     it._position = 0;
     return it;
   }
-  
+
   ArrayIterator end() const {
     auto it = ArrayIterator(*this);
     it._position = it._size;
@@ -139,10 +139,10 @@ class ArrayIterator {
       } else {
         _position += count;
         _current = _slice.at(_position).start();
-      } 
+      }
     }
   }
-    
+
   inline void reset() {
     _position = 0;
     _current = _first;
@@ -171,11 +171,12 @@ class ObjectIterator {
   // index. The default `false` is to use the index if it is there.
   explicit ObjectIterator(Slice slice, bool useSequentialIteration = false)
       : _slice(slice), _size(0), _position(0), _current(nullptr), _first(nullptr) {
-    
-    uint8_t const head = slice.head();     
+
+    uint8_t const head = slice.head();
 
     if (VELOCYPACK_UNLIKELY(slice.type(head) != ValueType::Object)) {
-      throw Exception(Exception::InvalidValueType, "Expecting Object slice");
+      //throw Exception(Exception::InvalidValueType, "Expecting Object slice");
+      abort();
     }
 
     _size = slice.objectLength();
@@ -224,8 +225,8 @@ class ObjectIterator {
     Slice key(_slice.getNthKeyUntranslated(_position));
     return ObjectPair(key.makeKey(), Slice(key.begin() + key.byteSize()));
   }
-  
-  ObjectIterator begin() const { 
+
+  ObjectIterator begin() const {
     auto it = ObjectIterator(*this);
     it._position = 0;
     return it;
@@ -272,7 +273,7 @@ class ObjectIterator {
   inline bool isFirst() const noexcept { return (_position == 0); }
 
   inline bool isLast() const noexcept { return (_position + 1 >= _size); }
-  
+
   inline void reset() {
     _position = 0;
     _current = _first;
