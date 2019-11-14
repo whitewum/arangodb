@@ -1,4 +1,4 @@
-v3.5.3 (XXXX-XX-XX)
+v3.5.3 (2019-11-20)
 -------------------
 
 * Fixed internal issue #4647: dead Coordinators are not removed for agency.
