@@ -31,6 +31,7 @@
 #include "Basics/RocksDBUtils.h"
 #include "Basics/VelocyPackHelper.h"
 #include "Basics/WriteLocker.h"
+#include "Basics/StaticStrings.h"
 #include "Cluster/ClusterFeature.h"
 #include "Cluster/ClusterHelpers.h"
 #include "Cluster/ClusterMethods.h"
@@ -704,7 +705,7 @@ void RestReplicationHandler::handleCommandClusterInventory() {
 
   DatabaseFeature& databaseFeature = _vocbase.server().getFeature<DatabaseFeature>();
   TRI_vocbase_t* vocbase = databaseFeature.lookupDatabase(dbName);
-  resultBuilder.add(VPackValue("properties"));
+  resultBuilder.add(VPackValue(StaticStrings::Properties));
   vocbase->toVelocyPack(resultBuilder);
   resultBuilder.add("from", VPackValue("rest handler"));
 

@@ -33,6 +33,13 @@
 
   db._dropDatabase("UnitTestsDumpSrc");
   db._dropDatabase("UnitTestsDumpDst");
+
+  try {
+    db._dropDatabase("UnitTestsDumpProperties1Src");
+  } catch (e) {}
+  try {
+    db._dropDatabase("UnitTestsDumpProperties1Dst");
+  } catch (e) {}
 })();
 
 return {
