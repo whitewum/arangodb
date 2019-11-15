@@ -272,13 +272,18 @@ void makeAttributesUnique(arangodb::velocypack::Builder& builder,
 
 /// @brief Create the database to restore to, connecting manually
 arangodb::Result tryCreateDatabase(arangodb::application_features::ApplicationServer& server,
-                                   std::string const& name) {
+                                   std::string const& name,
+                                   VPackSlice properties) {
   using arangodb::httpclient::SimpleHttpClient;
   using arangodb::httpclient::SimpleHttpResult;
   using arangodb::rest::RequestType;
   using arangodb::rest::ResponseCode;
   using arangodb::velocypack::ArrayBuilder;
   using arangodb::velocypack::ObjectBuilder;
+
+  LOG_DEVEL << "@@@@@@@@@@@@@@@@@@@@@@@@@@@@";
+  LOG_DEVEL << properties.toJson();
+  LOG_DEVEL << "@@@@@@@@@@@@@@@@@@@@@@@@@@@@";
 
   // get client feature for configuration info
   arangodb::ClientFeature& client =
@@ -301,7 +306,24 @@ arangodb::Result tryCreateDatabase(arangodb::application_features::ApplicationSe
   VPackBuilder builder;
   {
     ObjectBuilder object(&builder);
-    object->add("name", VPackValue(name));
+    object->add(arangodb::StaticStrings::DatabaseName, VPackValue(name));
+
+    // add replication factor write concern etc
+    if(properties.isObject()) {
+      ObjectBuilder guard(&builder, "options");
+      for(auto const& key : std::vector<std::string>{
+        arangodb::StaticStrings::MinReplicationFactor,
+        arangodb::StaticStrings::ReplicationFactor,
+        arangodb::StaticStrings::Sharding,
+      }) {
+        VPackSlice slice = properties.get(key);
+        if (!slice.isNone()){
+          LOG_DEVEL << "adding: " << key << " with value: " << slice.toJson();
+          object->add(key, slice);
+        }
+      }
+    }
+
     {
       ArrayBuilder users(&builder, "users");
       {
@@ -357,6 +379,20 @@ void checkEncryption(arangodb::ManagedDirectory& directory) {
     }
 #endif
   }
+}
+
+void getDBProperties(arangodb::ManagedDirectory& directory, VPackBuilder& builder) {
+  try {
+    VPackBuilder fileContentBuilder = directory.vpackFromJsonFile("dump.json");
+    builder.add(fileContentBuilder.slice().get("properties"));
+    LOG_DEVEL << builder.slice().toJson();
+  } catch (std::exception const& ext) {
+    LOG_DEVEL << ext.what();
+  } catch (...) {
+    LOG_DEVEL << "FAIL";
+    // the above may go wrong for several reasons
+  }
+
 }
 
 /// @brief Check the database name specified by the dump file
@@ -1437,7 +1473,9 @@ void RestoreFeature::start() {
 
       client.setDatabaseName("_system");
 
-      Result res = ::tryCreateDatabase(server(), dbName);
+      VPackBuilder properties;
+      getDBProperties(*_directory, properties);
+      Result res = ::tryCreateDatabase(server(), dbName, properties.slice());
       if (res.fail()) {
         LOG_TOPIC("b19db", FATAL, Logger::RESTORE) << "Could not create database '" << dbName << "': " << httpClient->getErrorMessage();
         FATAL_ERROR_EXIT();
@@ -1502,7 +1540,7 @@ void RestoreFeature::start() {
       << basics::StringUtils::join(dbs, "', '") << "' from dump directory '" << _options.inputPath << "'...";
   }
 
-  for (auto const& db : databases) {
+  for (auto& db : databases) {
     result.reset();
 
     if (_options.allDatabases) {
@@ -1512,22 +1550,28 @@ void RestoreFeature::start() {
       _directory = std::make_unique<ManagedDirectory>(
           server(), basics::FileUtils::buildFilename(_options.inputPath, db.first), false, false);
 
+      getDBProperties(*_directory, db.second);
       result = _clientManager.getConnectedClient(httpClient, _options.force,
                                                  false, !_options.createDatabase, false);
+
+      LOG_DEVEL << "@@@@ 1";
       if (result.is(TRI_ERROR_SIMPLE_CLIENT_COULD_NOT_CONNECT)) {
         LOG_TOPIC("3e715", FATAL, Logger::RESTORE)
             << "cannot create server connection, giving up!";
         FATAL_ERROR_EXIT();
       }
 
+      LOG_DEVEL << "@@@@ 2";
       if (result.is(TRI_ERROR_ARANGO_DATABASE_NOT_FOUND)) {
+        LOG_DEVEL << "@@@@ 3";
         if (_options.createDatabase) {
+          LOG_DEVEL << "@@@@ 4";
           // database not found, but database creation requested
           LOG_TOPIC("080f3", INFO, Logger::RESTORE) << "Creating database '" << db.first << "'";
 
           client.setDatabaseName("_system");
 
-          result = ::tryCreateDatabase(server(), db.first);
+          result = ::tryCreateDatabase(server(), db.first, db.second.slice());
           if (result.fail()) {
             LOG_TOPIC("7a35f", ERR, Logger::RESTORE) << "Could not create database '" << db.first << "': " << httpClient->getErrorMessage();
             break;
@@ -1554,6 +1598,8 @@ void RestoreFeature::start() {
         // continue with next db
         continue;
       }
+    } else {
+      getDBProperties(*_directory, db.second);
     }
 
     // read encryption info
