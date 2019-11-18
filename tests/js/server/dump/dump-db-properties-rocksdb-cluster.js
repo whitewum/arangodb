@@ -41,6 +41,7 @@ const db = internal.db;
 
 function dumpTestSuite () {
   'use strict';
+  let dbName;
 
   return {
 
@@ -49,6 +50,7 @@ function dumpTestSuite () {
 ////////////////////////////////////////////////////////////////////////////////
 
     setUp : function () {
+      let dbName = db._name();
     },
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -56,6 +58,16 @@ function dumpTestSuite () {
 ////////////////////////////////////////////////////////////////////////////////
 
     tearDown : function () {
+      db._name(dbName);
+    },
+
+
+    testDatabaseProperties : function () {
+      db._useDatabase("UnitTestsDumpProperties1Dst");
+      let props = db._properties();
+      assertEqual("flexible", props.sharding);
+      assertEqual(2, props.minReplicationFactor);
+      assertEqual(3, props.replicationFactor);
     },
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -68,8 +80,6 @@ function dumpTestSuite () {
 
       assertEqual(2, c.type()); // document
       assertTrue(p.waitForSync);
-      assertFalse(p.isVolatile);
-      assertEqual(256, p.indexBuckets);
 
       assertEqual(1, c.getIndexes().length); // just primary index
       assertEqual("primary", c.getIndexes()[0].type);
@@ -86,7 +96,6 @@ function dumpTestSuite () {
 
       assertEqual(2, c.type()); // document
       assertFalse(p.waitForSync);
-      assertFalse(p.isVolatile);
 
       assertEqual(1, c.getIndexes().length); // just primary index
       assertEqual("primary", c.getIndexes()[0].type);
@@ -116,7 +125,6 @@ function dumpTestSuite () {
 
       assertEqual(3, c.type()); // edges
       assertFalse(p.waitForSync);
-      assertFalse(p.isVolatile);
 
       assertEqual(2, c.getIndexes().length); // primary index + edges index
       assertEqual("primary", c.getIndexes()[0].type);
@@ -143,8 +151,6 @@ function dumpTestSuite () {
 
       assertEqual(2, c.type()); // document
       assertFalse(p.waitForSync);
-      assertFalse(p.isVolatile);
-      assertEqual(16, p.indexBuckets);
 
       assertEqual(1, c.getIndexes().length); // just primary index
       assertEqual("primary", c.getIndexes()[0].type);
@@ -161,7 +167,6 @@ function dumpTestSuite () {
 
       assertEqual(2, c.type()); // document
       assertFalse(p.waitForSync);
-      assertFalse(p.isVolatile);
 
       assertEqual(1, c.getIndexes().length); // just primary index
       assertEqual("primary", c.getIndexes()[0].type);
@@ -193,8 +198,6 @@ function dumpTestSuite () {
 
       assertEqual(2, c.type()); // document
       assertFalse(p.waitForSync);
-      assertFalse(p.isVolatile);
-      assertEqual(32, p.indexBuckets);
 
       assertEqual(9, c.getIndexes().length);
       assertEqual("primary", c.getIndexes()[0].type);
@@ -229,15 +232,13 @@ function dumpTestSuite () {
       assertTrue(c.getIndexes()[6].sparse);
       assertEqual([ "a_ss1", "a_ss2" ], c.getIndexes()[6].fields);
 
-      if (db._engine().name !== "rocksdb") {
-        assertFalse(c.getIndexes()[7].unique);
-        assertEqual("fulltext", c.getIndexes()[7].type);
-        assertEqual([ "a_f" ], c.getIndexes()[7].fields);
+      assertFalse(c.getIndexes()[7].unique);
+      assertEqual("fulltext", c.getIndexes()[7].type);
+      assertEqual([ "a_f" ], c.getIndexes()[7].fields);
 
-        assertEqual("geo", c.getIndexes()[8].type);
-        assertEqual([ "a_la", "a_lo" ], c.getIndexes()[8].fields);
-        assertFalse(c.getIndexes()[8].unique);
-      }
+      assertEqual("geo", c.getIndexes()[8].type);
+      assertEqual([ "a_la", "a_lo" ], c.getIndexes()[8].fields);
+      assertFalse(c.getIndexes()[8].unique);
 
       assertEqual(0, c.count());
     },
@@ -252,7 +253,6 @@ function dumpTestSuite () {
 
       assertEqual(2, c.type()); // document
       assertFalse(p.waitForSync);
-      assertTrue(p.isVolatile);
 
       assertEqual(1, c.getIndexes().length); // just primary index
       assertEqual("primary", c.getIndexes()[0].type);
@@ -269,7 +269,6 @@ function dumpTestSuite () {
 
       assertEqual(2, c.type()); // document
       assertFalse(p.waitForSync);
-      assertFalse(p.isVolatile);
       assertEqual(9, p.numberOfShards);
 
       assertEqual(1, c.getIndexes().length); // just primary index
@@ -295,7 +294,6 @@ function dumpTestSuite () {
 
       assertEqual(2, c.type()); // document
       assertFalse(p.waitForSync);
-      assertFalse(p.isVolatile);
 
       assertEqual(1, c.getIndexes().length); // just primary index
       assertEqual("primary", c.getIndexes()[0].type);
@@ -320,9 +318,10 @@ function dumpTestSuite () {
 
     },
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief test view restoring
-////////////////////////////////////////////////////////////////////////////////
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /// @brief test view restoring
+    ////////////////////////////////////////////////////////////////////////////////
 
     testView : function () {
       try {
@@ -354,22 +353,30 @@ function dumpTestSuite () {
       assertTrue(Math.abs(props.consolidationPolicy.threshold - 0.3) < 0.001);
       assertEqual(props.consolidationPolicy.type, "bytes_accum");
 
-      var res = db._query("FOR doc IN " + view.name() + " SEARCH doc.value >= 0 OPTIONS { waitForSync:true } RETURN doc").toArray();
+      var startTime = new Date();
+      var res;
+      while (new Date() - startTime < 60000) {
+        res = db._query("FOR doc IN " + view.name() + " SEARCH doc.value >= 0 OPTIONS { waitForSync: true } RETURN doc").toArray();
+        if (res.length === 5000) {
+          break;
+        }
+        console.log("Waiting for arangosearch index to be built...");
+        internal.wait(1);
+      }
       assertEqual(5000, res.length);
 
-      res = db._query("FOR doc IN " + view.name() + " SEARCH doc.value >= 2500 OPTIONS { waitForSync:true } RETURN doc").toArray();
+      res = db._query("FOR doc IN " + view.name() + " SEARCH doc.value >= 2500 RETURN doc").toArray();
       assertEqual(2500, res.length);
 
-      res = db._query("FOR doc IN " + view.name() + " SEARCH doc.value >= 5000 OPTIONS { waitForSync:true } RETURN doc").toArray();
+      res = db._query("FOR doc IN " + view.name() + " SEARCH doc.value >= 5000 RETURN doc").toArray();
       assertEqual(0, res.length);
 
-      res = db._query("FOR doc IN UnitTestsDumpView SEARCH PHRASE(doc.text, 'foxx jumps over', 'text_en') OPTIONS { waitForSync:true } RETURN doc").toArray();
+      res = db._query("FOR doc IN UnitTestsDumpView SEARCH PHRASE(doc.text, 'foxx jumps over', 'text_en')  RETURN doc").toArray();
       assertEqual(1, res.length);
     }
 
   };
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief test suite for the enterprise mode
@@ -415,7 +422,6 @@ function dumpTestEnterpriseSuite () {
         // when dumping multiple database the database name is one layer added:
         dumpDir = fs.join(dumpDir, "UnitTestsDumpSrc");
       }
-
       const smartEdgeCollectionPath = fs.join(dumpDir, `${edges}.structure.json`);
       const localEdgeCollectionPath = fs.join(dumpDir, `_local_${edges}.structure.json`);
       const fromEdgeCollectionPath = fs.join(dumpDir, `_from_${edges}.structure.json`);
@@ -485,7 +491,7 @@ function dumpTestEnterpriseSuite () {
       let insert = `FOR i IN 0..99 INSERT {value: TO_STRING(i), needUpdate: true, needRemove: true} INTO ${vertices}`;
       let update = `FOR x IN ${vertices} FILTER x.needUpdate UPDATE x WITH {needUpdate: false} INTO ${vertices}`;
       let remove = `FOR x IN ${vertices} FILTER x.needRemove REMOVE x INTO ${vertices}`;
-      // Note: Order is important here, we first insert, than update those inserted docs, then remove them again
+      // Note: Order is important here, we first insert, than update those inserted docs, then remoe them again
       let resIns = db._query(insert);
       assertEqual(100, resIns.getExtra().stats.writesExecuted);
       assertEqual(0, resIns.getExtra().stats.writesIgnored);
@@ -608,7 +614,7 @@ function dumpTestEnterpriseSuite () {
       let insertOtherValue = `LET vs = @vertices FOR i IN 0..99 INSERT {_from: vs[i], _to: vs[(i + 1) % 100], value: TO_STRING(i), needUpdate: true, needRemove: true} INTO ${edges}`;
       let update = `FOR x IN ${edges} FILTER x.needUpdate UPDATE x WITH {needUpdate: false} INTO ${edges}`;
       let remove = `FOR x IN ${edges} FILTER x.needRemove REMOVE x INTO ${edges}`;
-      // Note: Order is important here, we first insert, than update those inserted docs, then remoe them again
+      // Note: Order is important here, we first insert, than update those inserted docs, then remove them again
       let resInsSame = db._query(insertSameValue, {vertices: verticesList});
       assertEqual(100, resInsSame.getExtra().stats.writesExecuted);
       assertEqual(0, resInsSame.getExtra().stats.writesIgnored);
@@ -808,15 +814,13 @@ function dumpTestEnterpriseSuite () {
       //assertTrue(Math.abs(props.consolidationPolicy.threshold - 0.3) < 0.001);
       //assertEqual(props.consolidationPolicy.type, "bytes_accum");
     }
-
   };
-
 }
 
 jsunity.run(dumpTestSuite);
+
 if (isEnterprise) {
   jsunity.run(dumpTestEnterpriseSuite);
 }
 
 return jsunity.done();
-

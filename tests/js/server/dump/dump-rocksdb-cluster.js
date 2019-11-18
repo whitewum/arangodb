@@ -41,7 +41,6 @@ const db = internal.db;
 
 function dumpTestSuite () {
   'use strict';
-  let dbName;
 
   return {
 
@@ -50,7 +49,6 @@ function dumpTestSuite () {
 ////////////////////////////////////////////////////////////////////////////////
 
     setUp : function () {
-      let dbName = db._name();
     },
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -58,16 +56,6 @@ function dumpTestSuite () {
 ////////////////////////////////////////////////////////////////////////////////
 
     tearDown : function () {
-      db._name(dbName);
-    },
-
-
-    testDatabaseProperties : function () {
-      db._useDatabase("UnitTestsDumpProperties1Dst");
-      let props = db._properties();
-      assertEqual("flexible", props.sharding);
-      assertEqual(2, props.minReplicationFactor);
-      assertEqual(3, props.replicationFactor);
     },
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -28,6 +28,7 @@
 
 const functionsDocumentation = {
   'dump': 'dump tests',
+  'dump_db_properties': 'dump db properties tests',
   'dump_authentication': 'dump tests with authentication',
   'dump_encrypted': 'encrypted dump tests',
   'dump_maskings': 'masked dump tests',
@@ -55,6 +56,7 @@ const RESET = require('internal').COLORS.COLOR_RESET;
 
 const testPaths = {
   'dump': [tu.pathForTesting('server/dump')],
+  'dump_db_properties': [tu.pathForTesting('server/dump')],
   'dump_authentication': [tu.pathForTesting('server/dump')],
   'dump_encrypted': [tu.pathForTesting('server/dump')],
   'dump_maskings': [tu.pathForTesting('server/dump')],
@@ -392,6 +394,30 @@ function dump (options) {
   return dump_backend(options, {}, {}, options, options, 'dump', tstFiles, function(){});
 }
 
+function dump_db_properties (options) {
+  if(options.cluster !== true) {
+    // skip non cluster
+    return
+  }
+  print("######################################################################")
+  print("######################################################################")
+  print("######################################################################")
+  print(options);
+  print("######################################################################")
+  print("######################################################################")
+  print("######################################################################")
+  let c = getClusterStrings(options);
+  let tstFiles = {
+    dumpSetup: 'dump-db-properties-setup' + c.cluster + '.js',
+    dumpCleanup: 'cleanup-nothing.js',
+    dumpAgain: 'dump-db-properties' + options.storageEngine + c.cluster + '.js',
+    dumpTearDown: 'dump-db-properties-teardown' + c.cluster + '.js'
+  };
+
+  return dump_backend(options, {}, {}, options, options, 'dump_db_properties', tstFiles, function(){});
+}
+
+
 function dumpMultiple (options) {
   let c = getClusterStrings(options);
   let tstFiles = {
@@ -619,23 +645,26 @@ function hotBackup (options) {
 
 exports.setup = function (testFns, defaultFns, opts, fnDocs, optionsDoc, allTestPaths) {
   Object.assign(allTestPaths, testPaths);
-  testFns['dump'] = dump;
-  defaultFns.push('dump');
+  //testFns['dump'] = dump;
+  //defaultFns.push('dump');
 
-  testFns['dump_authentication'] = dumpAuthentication;
-  defaultFns.push('dump_authentication');
+  testFns['dump_db_properties'] = dump_db_properties;
+  defaultFns.push('dump_db_properties');
 
-  testFns['dump_encrypted'] = dumpEncrypted;
-  defaultFns.push('dump_encrypted');
+  //testFns['dump_authentication'] = dumpAuthentication;
+  //defaultFns.push('dump_authentication');
 
-  testFns['dump_maskings'] = dumpMaskings;
-  defaultFns.push('dump_maskings');
+  //testFns['dump_encrypted'] = dumpEncrypted;
+  //defaultFns.push('dump_encrypted');
 
-  testFns['dump_multiple'] = dumpMultiple;
-  defaultFns.push('dump_multiple');
+  //testFns['dump_maskings'] = dumpMaskings;
+  //defaultFns.push('dump_maskings');
 
-  testFns['hot_backup'] = hotBackup;
-  defaultFns.push('hot_backup');
+  //testFns['dump_multiple'] = dumpMultiple;
+  //defaultFns.push('dump_multiple');
+
+  //testFns['hot_backup'] = hotBackup;
+  //defaultFns.push('hot_backup');
 
   for (var attrname in functionsDocumentation) { fnDocs[attrname] = functionsDocumentation[attrname]; }
   for (var i = 0; i < optionsDocumentation.length; i++) { optionsDoc.push(optionsDocumentation[i]); }

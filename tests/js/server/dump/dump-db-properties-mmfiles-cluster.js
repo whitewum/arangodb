@@ -383,6 +383,7 @@ function dumpTestEnterpriseSuite () {
   const satellite = "UnitTestDumpSatelliteCollection";
   const gm = require("@arangodb/smart-graph");
   const instanceInfo = JSON.parse(require('internal').env.INSTANCEINFO);
+  let dbName;
 
   return {
 
@@ -391,6 +392,7 @@ function dumpTestEnterpriseSuite () {
 ////////////////////////////////////////////////////////////////////////////////
 
     setUp : function () {
+      let dbName = db._name();
     },
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -398,6 +400,15 @@ function dumpTestEnterpriseSuite () {
 ////////////////////////////////////////////////////////////////////////////////
 
     tearDown : function () {
+      db._name(dbName);
+    },
+
+    testDatabaseProperties : function () {
+      db._useDatabase("UnitTestsDumpProperties1Dst");
+      let props = db._properties();
+      assertEqual("flexible", props.sharding);
+      assertEqual(2, props.minReplicationFactor);
+      assertEqual(3, props.replicationFactor);
     },
 
     testSatelliteCollections : function () {

@@ -136,6 +136,25 @@ function setupSatelliteCollections() {
   var analyzers = require("@arangodb/analyzers");
   var i, c;
 
+  // test properties /////////////////////////////////////////////
+  try {
+    db._dropDatabase("UnitTestsDumpProperties1Src");
+  } catch (err1) {
+  }
+  db._createDatabase("UnitTestsDumpProperties1Src", {
+    "minReplicationFactor": 2,
+    "replicationFactor": 3,
+    "sharding": "flexible",
+  });
+
+  try {
+    db._dropDatabase("UnitTestsDumpProperties1Dst");
+  } catch (err2) {
+  }
+  //db._createDatabase("UnitTestsDumpProperties1Dst");
+  // test properties - end ///////////////////////////////////////
+
+
   try {
     db._dropDatabase("UnitTestsDumpSrc");
   } catch (err1) {
@@ -147,7 +166,6 @@ function setupSatelliteCollections() {
   } catch (err2) {
   }
   db._createDatabase("UnitTestsDumpDst");
-
 
   db._useDatabase("UnitTestsDumpSrc");
 
