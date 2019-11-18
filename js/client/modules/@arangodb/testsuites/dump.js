@@ -406,15 +406,15 @@ function dump_db_properties (options) {
   print("######################################################################")
   print("######################################################################")
   print("######################################################################")
-  let c = getClusterStrings(options);
   let tstFiles = {
-    dumpSetup: 'dump-db-properties-setup' + c.cluster + '.js',
+    dumpSetup: 'dump-db-properties-setup-cluster.js',
     dumpCleanup: 'cleanup-nothing.js',
-    dumpAgain: 'dump-db-properties' + options.storageEngine + c.cluster + '.js',
-    dumpTearDown: 'dump-db-properties-teardown' + c.cluster + '.js'
+    dumpAgain: 'dump-db-properties-' + options.storageEngine + '-cluster.js',
+    dumpTearDown: 'dump-db-properties-teardown-cluster.js'
   };
 
-  return dump_backend(options, {}, {}, options, options, 'dump_db_properties', tstFiles, function(){});
+  return dump_backend(options, {}, {}, /*dump*/ options, /*restore*/ options,
+                      'dump_db_properties', tstFiles, function(){});
 }
 
 
