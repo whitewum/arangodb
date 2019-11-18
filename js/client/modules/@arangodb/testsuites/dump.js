@@ -409,7 +409,7 @@ function dump_db_properties (options) {
   let tstFiles = {
     dumpSetup: 'dump-db-properties-setup-cluster.js',
     dumpCleanup: 'cleanup-nothing.js',
-    dumpAgain: 'dump-db-properties-' + options.storageEngine + '-cluster.js',
+    dumpAgain: 'dump-db-properties-cluster.js',
     dumpTearDown: 'dump-db-properties-teardown-cluster.js'
   };
 
