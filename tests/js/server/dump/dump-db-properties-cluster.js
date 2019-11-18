@@ -74,9 +74,4 @@ function dumpTestSuite () {
 }
 
 jsunity.run(dumpTestSuite);
-
-if (isEnterprise) {
-  jsunity.run(dumpTestEnterpriseSuite);
-}
-
 return jsunity.done();

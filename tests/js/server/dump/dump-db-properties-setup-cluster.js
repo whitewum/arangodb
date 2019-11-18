@@ -31,11 +31,11 @@
 const db = require("@arangodb").db;
 const isEnterprise = require("internal").isEnterprise();
 
-const setupSmartGraph = function () {
-  if (!isEnterprise) {
-    return;
-  }
-}
+//const setupSmartGraph = function () {
+//  if (!isEnterprise) {
+//    return;
+//  }
+//}
 
 
 (function () {
